@@ -1,6 +1,8 @@
+import re
 from collections import namedtuple
 
 OPCODES_FILE = "opcodes.cfg"
+PLACEHOLDER = "x"
 
 
 def raise_parsing_error(msg, line=None):
@@ -30,7 +32,12 @@ def _parse_opcodes_file():
             opname = opname.strip().upper()
             opcode = opcode.strip().lower()
 
-            if not opname.isalpha() or not opcode.replace("x", "").isdigit():
+            # The placeholder must be contiguous and at the end.
+            if not opcode.endswith(opcode.count(PLACEHOLDER) * PLACEHOLDER):
+                raise_parsing_error("Invalid opcode placeholders", index)
+
+            valid_number = opcode.rstrip(PLACEHOLDER).isdigit()
+            if not opname.isalpha() or not valid_number:
                 raise_parsing_error("Invalid opname or opcode.", index)
 
             if len(opcode) != 3:
@@ -46,4 +53,63 @@ def _parse_opcodes_file():
 
 all_opcodes = _parse_opcodes_file()
 
-Instruction = namedtuple("Instruction", "opname oparg")
+BaseInstruction = namedtuple("BaseInstruction", "opname oparg")
+
+
+class Instruction(BaseInstruction):
+    def full_opcode(self):
+        opcode_base = all_opcodes[self.opname]
+        max_arg_size = opcode_base.count(PLACEHOLDER)
+
+        oparg = str(self.oparg or 0)
+        if len(oparg) > max_arg_size:
+            raise ValueError("Opcode argument is too large.")
+
+        padded_oparg = oparg.zfill(max_arg_size)
+
+        opcode = ""
+        for char in opcode_base:
+            if char == PLACEHOLDER:
+                opcode += padded_oparg
+                break
+
+            opcode += char
+
+        return opcode
+
+    @classmethod
+    def from_opcode(cls, opcode):
+        opcode = str(opcode)
+
+        if len(opcode) != 3:
+            raise ValueError("Invalid opcode size.")
+
+        best_match = None
+        best_size = 0
+
+        for opname, opcode_base in all_opcodes.items():
+            op_start = opcode_base.rstrip(PLACEHOLDER)
+            match_object = re.match(op_start, opcode)
+
+            if match_object is None:
+                continue
+
+            match = match_object.group(0)
+
+            if len(match) > best_size:
+                best_match = opname
+                best_size = len(match)
+
+            if best_size == 3:
+                break
+
+        if best_match is None:
+            return None
+
+        arg_size = all_opcodes[best_match].count(PLACEHOLDER)
+        if arg_size > 0:
+            oparg = opcode[-arg_size:]
+        else:
+            oparg = None
+
+        return cls(best_match, oparg)

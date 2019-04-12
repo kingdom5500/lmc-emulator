@@ -1,4 +1,13 @@
+from collections import namedtuple
+
 OPCODES_FILE = "opcodes.cfg"
+
+
+def raise_parsing_error(msg, line=None):
+    if line is not None:
+        msg += " (line {})".format(line)
+
+    raise ValueError(msg)
 
 
 def _parse_opcodes_file():
@@ -7,7 +16,7 @@ def _parse_opcodes_file():
     opcode_lookup = {}
 
     with open(OPCODES_FILE) as config:
-        for line in config:
+        for index, line in enumerate(config, 1):
             info = line.split("#", 1)[0]  # Remove any comments.
 
             if not info.strip():
@@ -15,22 +24,20 @@ def _parse_opcodes_file():
 
             parts = info.split(":")
             if len(parts) != 2:
-                raise ValueError(
-                    "Invalid opcode definition {opdef} in {file}".format(
-                        opdef=repr(info), file=repr(OPCODES_FILE)
-                    )
-                )
+                raise_parsing_error("Invalid opcode definition.", index)
 
             opname, opcode = parts
             opname = opname.strip().upper()
             opcode = opcode.strip().lower()
 
+            if not opname.isalpha() or not opcode.replace("x", "").isdigit():
+                raise_parsing_error("Invalid opname or opcode.", index)
+
+            if len(opcode) != 3:
+                raise_parsing_error("Invalid opcode length.", index)
+
             if opname in opcode_lookup:
-                raise ValueError(
-                    "Duplicate instruction {name} in {file}".format(
-                        name=repr(opname), file=repr(OPCODES_FILE)
-                    )
-                )
+                raise_parsing_error("Duplicate opname.", index)
 
             opcode_lookup[opname] = opcode
 
@@ -38,3 +45,5 @@ def _parse_opcodes_file():
 
 
 all_opcodes = _parse_opcodes_file()
+
+Instruction = namedtuple("Instruction", "opname oparg")

@@ -1,50 +1,137 @@
 from utils import all_opcodes, Instruction, raise_parsing_error
 
+COMMENT_STARTERS = ("#", "//")
+
+
+def _remove_comments(line):
+    """
+    Remove any comments from a line.
+
+    The `starters` argument defines how comments should
+    start. Nothing else is removed from the line. The
+    return value is a tuple in the form (code, comment).
+    """
+
+    first_start = COMMENT_STARTERS[0]
+
+    for start in COMMENT_STARTERS:
+        line = line.replace(start, first_start)
+
+    parts = line.split(first_start, 1)
+
+    if len(parts) == 1:
+        return (parts[0], "")
+
+    return tuple(parts)
+
+
+def _get_raw_assembly(string):
+    """
+    Yield each instruction line as a tuple of parts.
+
+    This will strip comments and whitespace before yielding
+    each whitespace-separated part as a tuple. No validation
+    on the parts is performed.
+    """
+
+    line = ""
+    for index, char in enumerate(string):
+        if char in "\r\n" or index == len(string) - 1:
+            code, _ = _remove_comments(line)
+
+            parts = code.strip().split()
+            if parts:
+                yield tuple(parts)
+
+            line = ""
+
+        line += char
+
+
+def _scan_for_labels(string):
+    """
+    Scan an assembly string for its labels.
+
+    This will return a dictionary whose content is in
+    the form {label_name: address}.
+
+    Labels are considered to be case-sensitive, so having
+    both "MAIN" and "main" as labels would be perfectly
+    valid. However, if two label names are identical, a
+    ValueError is raised.
+    """
+
+    labels = {}
+
+    for addr, parts in enumerate(_get_raw_assembly(string)):
+        # Lines with only one part cannot have labels. Skip 'em.
+        if len(parts) == 1:
+            continue
+
+        # For lines with two parts, the first part is considered
+        # to be a label if it is not a valid instruction name.
+        elif len(parts) == 2:
+            if parts[0] not in all_opcodes:
+                label = parts[0]
+            else:
+                continue
+
+        # Lines with three parts have a label at the first part.
+        elif len(parts) == 3:
+            label = parts[0]
+
+            # The label must not use a reserved instruction name.
+            if label in all_opcodes:
+                raise ValueError("Invalid label name " + repr(label))
+
+        if label in labels:
+            raise ValueError("Duplicate label " + repr(label))
+
+        labels[label] = addr
+
+    return labels
+
 
 def parse_assembly(string):
     """
-    Parse an assembly string.
+    Parse an assembly string into Instructions.
 
-    This generator function takes a string and will try
-    to parse it. If it encounters a syntax error with the
-    string, an appropriate `ValueError` will be raised.
-
-    The generator yields `Instruction` objects.
-    Labels are converted into addresses in this function,
-    so the objects will not contain any label information
-    at all.
+    This uses generators as much as possible so that memory
+    usage stays at a minimum. However, it's hardly a concern
+    as LMC programs shouldn't be more than 100 instructions.
+    Still, this is supposed to be highly expandable, and it
+    doesn't hurt readability to do it this way at all.
     """
 
-    # This isn't the most memory-efficient way of parsing the content,
-    # but LMC programs can't reach more than 100 instructions so it
-    # shouldn't be too bad. Still, it might be a nice idea to parse
-    # the content more efficiently with generators and stuff. I think
-    # this should also look for labels before fully parsing to avoid
-    # sorting them out afterwards.
+    labels = _scan_for_labels(string)
 
-    labels = {}
-    instructions = []  # Stores tuples of (opname, arg, line)
-    address = 0
+    def _resolve_argument(oparg):
+        """
+        Simply convert an argument into an address.
 
-    for index, line in enumerate(string.splitlines(), 1):
-        # We're allowing "#" and "//" for comments.
-        # TODO: consider a warning when both are used.
-        line = line.replace("//", "#").split("#", 1)[0]
+        This does nothing if the argument is an integer, but
+        will convert labels into addresses where necessary.
+        A ValueError may be raised for unknown labels.
+        """
 
-        if not line.strip():
-            continue
+        try:
+            address = int(oparg)
+        except ValueError:
+            address = labels.get(oparg)
 
-        parts = line.split()
-        if not all(part.lstrip("-").isalnum() for part in parts):
-            raise_parsing_error("Invalid character.", index)
+        if address is None:
+            raise raise_parsing_error("Invalid label " + repr(oparg))
 
+        return address
+
+    for parts in _get_raw_assembly(string):
         if len(parts) == 1:
             # Simple enough, just an 'INSTR' line.
             opname = parts[0]
             if opname not in all_opcodes:
                 raise_parsing_error("Invalid instruction.", index)
 
-            instructions.append((opname, None, index))
+            yield Instruction(opname, None)
 
         elif len(parts) == 2:
             if not any(part in all_opcodes for part in parts):
@@ -52,18 +139,12 @@ def parse_assembly(string):
 
             # Check if we've got a 'LABEL INSTR' line.
             if parts[0] not in all_opcodes:
-                label, opname = parts
-
-                if label in labels or not label.isalnum():
-                    raise_parsing_error("Invalid label.", index)
-
-                labels[label] = address
-                instructions.append((opname, None, index))
+                yield Instruction(parts[1], None)
 
             # Or maybe we've got a 'INSTR ARG' line.
             elif parts[1] not in all_opcodes:
                 opname, oparg = parts
-                instructions.append((opname, oparg, index))
+                yield Instruction(opname, _resolve_argument(oparg))
 
             else:
                 raise_parsing_error("Invalid instruction.", index)
@@ -71,38 +152,14 @@ def parse_assembly(string):
         elif len(parts) == 3:
             # This is also easy, it's always 'LABEL INSTR ARG'.
             label, opname, oparg = parts
-
-            if label in labels or not label.isalnum():
-                raise_parsing_error("Invalid label.", index)
-
-            labels[label] = address
-            instructions.append((opname, oparg, index))
-
-        address += 1
-
-    # Okay nice, we've got all of our instructions now.
-    # It's time to convert the labels to addresses.
-    for instr in instructions:
-        opname, oparg, lineno = instr
-
-        if oparg is not None:
-            if oparg in labels:
-                oparg = labels[oparg]
-
-            elif oparg.lstrip("-").isdigit():
-                oparg = int(oparg)
-
-            else:
-                raise_parsing_error("Invalid instruction argument.", lineno)
-
-        yield Instruction(opname, oparg)
+            yield Instruction(opname, _resolve_argument(oparg))
 
 
 def parse_assembly_file(file_path):
     """
-    Parse an assembly file.
+    Parse an assembly file into Instructions.
 
-    See `parse_assembly` for further information.
+    Refer to `parse_assembly` for further information.
     """
 
     with open(file_path) as asm_file:

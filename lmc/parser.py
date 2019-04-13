@@ -1,5 +1,8 @@
 from utils import all_opcodes, Instruction, raise_parsing_error
 
+# TODO: create a way for parsing file streams line-by-line
+# without even reading the entire file at once.
+
 COMMENT_STARTERS = ("#", "//")
 
 
@@ -124,7 +127,7 @@ def parse_assembly(string):
 
         return address
 
-    for parts in _get_raw_assembly(string):
+    for index, parts in enumerate(_get_raw_assembly(string), 1):
         if len(parts) == 1:
             # Simple enough, just an 'INSTR' line.
             opname = parts[0]
@@ -152,6 +155,9 @@ def parse_assembly(string):
         elif len(parts) == 3:
             # This is also easy, it's always 'LABEL INSTR ARG'.
             label, opname, oparg = parts
+            if opname not in all_opcodes:
+                raise_parsing_error("Invalid instruction.", index)
+
             yield Instruction(opname, _resolve_argument(oparg))
 
 

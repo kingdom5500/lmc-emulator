@@ -68,7 +68,7 @@ class Instruction(BaseInstruction):
 
 def raise_parsing_error(msg, line=None):
     if line is not None:
-        msg += " (line {})".format(line)
+        msg += " (instruction {})".format(line)
 
     raise ValueError(msg)
 
@@ -97,9 +97,10 @@ def _parse_opcodes_file():
             if not opcode.endswith(opcode.count(PLACEHOLDER) * PLACEHOLDER):
                 raise_parsing_error("Invalid opcode placeholders", index)
 
-            valid_number = opcode.rstrip(PLACEHOLDER).isdigit()
-            if not opname.isalpha() or not valid_number:
-                raise_parsing_error("Invalid opname or opcode.", index)
+            if opcode.count(PLACEHOLDER) != len(opcode):
+                valid_number = opcode.rstrip(PLACEHOLDER).isdigit()
+                if not opname.isalpha() or not valid_number:
+                    raise_parsing_error("Invalid opname or opcode.", index)
 
             if len(opcode) != 3:
                 raise_parsing_error("Invalid opcode length.", index)

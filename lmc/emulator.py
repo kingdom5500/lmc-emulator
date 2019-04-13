@@ -1,11 +1,18 @@
-import parser
+from compiler import decompile_file
 from utils import (
     Instruction, instr_handler, registered_handlers
 )
 
 
 class LMCEmulator:
+    """An emulator for the Little Man Computer."""
+
     # TODO: make a method for raising very detailed errors.
+
+    # TODO: there's a lot of confusing conversion to and
+    # from integers (in the whole project, really). try to
+    # tidy this up a little bit.
+
     def __init__(self, memory=None, prog_ctr=0, accumulator=0):
         if memory is None:
             memory = [0] * 100
@@ -23,17 +30,45 @@ class LMCEmulator:
 
         self.output = ""
 
+    def reset(self):
+        for addr in range(len(self.memory)):
+            self.memory[addr] = 0
+
+        self.prog_ctr = 0
+        self.accumulator = 0
+        self.running = False
+        self.output = ""
+
+    def open_program(self, file_path):
+        self.reset()
+
+        for index, instr in enumerate(decompile_file(file_path)):
+            if instr is None:
+                continue
+
+            self.memory[index] = int(instr.full_opcode())
+
+    def next_step(self):
+        opcode = self.memory[self.prog_ctr]
+        padded = str(opcode).zfill(3)
+        instr = Instruction.from_opcode(padded)
+
+        self.prog_ctr += 1
+        self.run_instruction(instr)
+
     def main_loop(self):
         self.running = True
         while self.running:
-            value = self.memory[self.prog_ctr]
-            padded = str(value).zfill(3)
-            instr = Instruction.from_opcode(padded)
+            self.next_step()
 
-            self.prog_ctr += 1
-            self.run_instruction(instr)
+        print(self.output)
 
     def run_instruction(self, instr):
+        if instr is None:
+            raise ValueError(
+                "Execution of invalid instruction at " + str(self.prog_ctr)
+            )
+
         handler, has_arg = registered_handlers[instr.opname]
 
         if has_arg:
@@ -103,12 +138,3 @@ class LMCEmulator:
     @instr_handler("OTC", has_arg=False)
     def output_char_instr(self):
         self.output += chr(self.accumulator)
-
-    # We can use DAT as an error-catching instruction
-    # because all opcodes which aren't actually valid
-    # instructions will resolve to a DAT instruction.
-    @instr_handler("DAT", has_arg=True)
-    def invalid_instr(self, opcode):
-        raise ValueError(
-            "Invalid instruction opcode reached: " + str(opcode)
-        )

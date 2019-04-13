@@ -6,6 +6,12 @@ PLACEHOLDER = "x"
 
 BaseInstruction = namedtuple("BaseInstruction", "opname oparg")
 
+# TODO: make a helper function which checks if a string is an
+# integer, including with signs. it should return an int:
+#   -1 if negative
+#    0 if not a digit
+#    1 if positive
+
 
 class Instruction(BaseInstruction):
     def full_opcode(self):
@@ -15,6 +21,9 @@ class Instruction(BaseInstruction):
         oparg = str(self.oparg if self.oparg is not None else "")
         if len(oparg) > max_arg_size:
             raise ValueError("Opcode argument is too large.")
+
+        if oparg.startswith("-"):
+            max_arg_size += 1
 
         padded_oparg = oparg.zfill(max_arg_size)
 
@@ -32,7 +41,9 @@ class Instruction(BaseInstruction):
     def from_opcode(cls, opcode):
         opcode = str(opcode)
 
-        if len(opcode) != 3:
+        expected_size = 4 if opcode[0] == "-" else 3
+
+        if len(opcode) != expected_size:
             raise ValueError("Invalid opcode size.")
 
         best_match = None
@@ -55,7 +66,13 @@ class Instruction(BaseInstruction):
                 break
 
         if best_match is None:
-            return None
+            # attempt to find a catch-all opcode
+            for opname, opcode_base in all_opcodes.items():
+                if opcode_base == PLACEHOLDER * 3:
+                    best_match = opname
+                    break
+            else:
+                raise ValueError("Invalid opcode: " + str(opcode))
 
         arg_size = all_opcodes[best_match].count(PLACEHOLDER)
         if arg_size > 0:

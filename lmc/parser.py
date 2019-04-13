@@ -169,4 +169,5 @@ def parse_assembly_file(file_path):
     """
 
     with open(file_path) as asm_file:
-        yield from parse_assembly(asm_file.read())
+        for instruction in parse_assembly(asm_file.read()):
+            yield instruction

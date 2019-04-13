@@ -4,55 +4,6 @@ from collections import namedtuple
 OPCODES_FILE = "opcodes.cfg"
 PLACEHOLDER = "x"
 
-
-def raise_parsing_error(msg, line=None):
-    if line is not None:
-        msg += " (line {})".format(line)
-
-    raise ValueError(msg)
-
-
-def _parse_opcodes_file():
-    """Parse the opcodes file into a dictionary."""
-
-    opcode_lookup = {}
-
-    with open(OPCODES_FILE) as config:
-        for index, line in enumerate(config, 1):
-            info = line.split("#", 1)[0]  # Remove any comments.
-
-            if not info.strip():
-                continue  # Blank line.
-
-            parts = info.split(":")
-            if len(parts) != 2:
-                raise_parsing_error("Invalid opcode definition.", index)
-
-            opname, opcode = parts
-            opname = opname.strip().upper()
-            opcode = opcode.strip().lower()
-
-            # The placeholder must be contiguous and at the end.
-            if not opcode.endswith(opcode.count(PLACEHOLDER) * PLACEHOLDER):
-                raise_parsing_error("Invalid opcode placeholders", index)
-
-            valid_number = opcode.rstrip(PLACEHOLDER).isdigit()
-            if not opname.isalpha() or not valid_number:
-                raise_parsing_error("Invalid opname or opcode.", index)
-
-            if len(opcode) != 3:
-                raise_parsing_error("Invalid opcode length.", index)
-
-            if opname in opcode_lookup:
-                raise_parsing_error("Duplicate opname.", index)
-
-            opcode_lookup[opname] = opcode
-
-    return opcode_lookup
-
-
-all_opcodes = _parse_opcodes_file()
-
 BaseInstruction = namedtuple("BaseInstruction", "opname oparg")
 
 
@@ -113,3 +64,52 @@ class Instruction(BaseInstruction):
             oparg = None
 
         return cls(best_match, oparg)
+
+
+def raise_parsing_error(msg, line=None):
+    if line is not None:
+        msg += " (line {})".format(line)
+
+    raise ValueError(msg)
+
+
+def _parse_opcodes_file():
+    """Parse the opcodes file into a dictionary."""
+
+    opcode_lookup = {}
+
+    with open(OPCODES_FILE) as config:
+        for index, line in enumerate(config, 1):
+            info = line.split("#", 1)[0]  # Remove any comments.
+
+            if not info.strip():
+                continue  # Blank line.
+
+            parts = info.split(":")
+            if len(parts) != 2:
+                raise_parsing_error("Invalid opcode definition.", index)
+
+            opname, opcode = parts
+            opname = opname.strip().upper()
+            opcode = opcode.strip().lower()
+
+            # The placeholder must be contiguous and at the end.
+            if not opcode.endswith(opcode.count(PLACEHOLDER) * PLACEHOLDER):
+                raise_parsing_error("Invalid opcode placeholders", index)
+
+            valid_number = opcode.rstrip(PLACEHOLDER).isdigit()
+            if not opname.isalpha() or not valid_number:
+                raise_parsing_error("Invalid opname or opcode.", index)
+
+            if len(opcode) != 3:
+                raise_parsing_error("Invalid opcode length.", index)
+
+            if opname in opcode_lookup:
+                raise_parsing_error("Duplicate opname.", index)
+
+            opcode_lookup[opname] = opcode
+
+    return opcode_lookup
+
+
+all_opcodes = _parse_opcodes_file()

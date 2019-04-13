@@ -112,4 +112,16 @@ def _parse_opcodes_file():
     return opcode_lookup
 
 
+registered_handlers = {}
+
+
+def instr_handler(opname, *, has_arg=True):
+
+    def wrapper(method):
+        registered_handlers[opname] = (method, has_arg)
+        return method
+
+    return wrapper
+
+
 all_opcodes = _parse_opcodes_file()

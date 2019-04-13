@@ -12,7 +12,7 @@ class Instruction(BaseInstruction):
         opcode_base = all_opcodes[self.opname]
         max_arg_size = opcode_base.count(PLACEHOLDER)
 
-        oparg = str(self.oparg or 0)
+        oparg = str(self.oparg if self.oparg is not None else "")
         if len(oparg) > max_arg_size:
             raise ValueError("Opcode argument is too large.")
 

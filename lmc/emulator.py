@@ -103,3 +103,12 @@ class LMCEmulator:
     @instr_handler("OTC", has_arg=False)
     def output_char_instr(self):
         self.output += chr(self.accumulator)
+
+    # We can use DAT as an error-catching instruction
+    # because all opcodes which aren't actually valid
+    # instructions will resolve to a DAT instruction.
+    @instr_handler("DAT", has_arg=True)
+    def invalid_instr(self, opcode):
+        raise ValueError(
+            "Invalid instruction opcode reached: " + str(opcode)
+        )
